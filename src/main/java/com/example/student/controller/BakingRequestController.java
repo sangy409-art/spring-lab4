@@ -4,6 +4,7 @@ import com.example.student.model.BakingRequest;
 import com.example.student.service.BakingRequestService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -11,9 +12,12 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/baking-requests")
 public class BakingRequestController {
+
     private final BakingRequestService service;
 
-    public BakingRequestController(BakingRequestService service) { this.service = service; }
+    public BakingRequestController(BakingRequestService service) {
+        this.service = service;
+    }
 
     @GetMapping
     public ResponseEntity<List<BakingRequest>> getAll() {
@@ -31,10 +35,12 @@ public class BakingRequestController {
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<BakingRequest> update(@PathVariable Long id, @RequestBody BakingRequest patch) {
+    public ResponseEntity<BakingRequest> update(@PathVariable Long id,
+                                                @RequestBody BakingRequest patch) {
         return ResponseEntity.ok(service.update(id, patch));
     }
 
+    @PreAuthorize("hasRole('ADMIN') or @bakingRequestSecurity.isOwner(#id, authentication)")
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Long id) {
         service.delete(id);

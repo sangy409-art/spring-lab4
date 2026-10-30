@@ -1,189 +1,129 @@
-# Bakery Production Planning API
+# Bakery Production Planning API (Lab 4: Security)
 
-REST API для управления производством пекарни: ингредиенты, рецептуры,
-производственные партии и заявки на выпечку.
+REST API для управления производством пекарни с аутентификацией и авторизацией через Spring Security.
 
-**Стек:** Java 21, Spring Boot, Spring Data JPA, Hibernate, PostgreSQL, Maven.
+## Стек
 
----
+- Java 21, Spring Boot, Maven
+- Spring Web MVC, Spring Data JPA, Hibernate
+- PostgreSQL
+- Spring Security (HTTP Basic Auth, CSRF, BCrypt)
+- dotenv-java
 
 ## Предметная область
 
-Приложение моделирует производственный процесс пекарни:
+1. User — пользователь системы (заказчик).
+2. Ingredient — ингредиент (мука, сахар).
+3. Recipe — рецептура (состав изделия).
+4. ProductionBatch — производственная партия.
+5. BakingRequest — заявка на выпечку.
 
-1. **Пользователь (User)** — заказчик, который оформляет заявки на выпечку.
-2. **Ингредиент (Ingredient)** — сырьё (мука, сахар и т.д.) с единицей измерения и остатком на складе.
-3. **Рецептура (Recipe)** — состав изделия: список ингредиентов с количеством на единицу продукции.
-4. **Производственная партия (ProductionBatch)** — запущенное производство: рецептура, количество изделий, статус.
-5. **Заявка на выпечку (BakingRequest)** — заказ от пользователя: рецептура, количество, статус.
+## Аутентификация и авторизация
 
-### Связи между сущностями
+### Регистрация
 
-- `BakingRequest.user_id` → `users.id` (заявка принадлежит пользователю)
-- `BakingRequest.recipe_id` → `recipes.id` (заявка на конкретную рецептуру)
-- `BakingRequest.batch_id` → `production_batches.id` (заявка может быть привязана к партии)
-- `ProductionBatch.recipe_id` → `recipes.id` (партия производится по рецептуре)
-- `RecipeItem.recipe_id` → `recipes.id` (элемент состава рецептуры)
-- `RecipeItem.ingredient_id` → `ingredients.id` (элемент ссылается на ингредиент)
+POST /api/auth/register — создание пользователя.
+- Пароль: минимум 8 символов, хотя бы одна буква и одна цифра.
+- Email должен быть уникальным.
+- Роль всегда USER — повышение прав через регистрацию невозможно.
 
----
+### Аутентификация
 
-## Бизнес-операции
+HTTP Basic Auth: Authorization: Basic base64(email:password).
+- Пароли хранятся в БД в виде BCrypt-хэша.
+- Учётные записи: admin@bakery.local / admin123 (ADMIN), user@bakery.local / user123 (USER).
+- Админ создаётся автоматически при старте через DataInitializer.
 
-Реализованы 5 операций, отражающих специфику производства пекарни. Каждая операция изменяет состояние
-нескольких сущностей и зависит от текущего состояния данных.
+### CSRF
 
-### 1. Запуск партии со списанием ингредиентов
-`POST /api/business/start-batch/{batchId}`
+- CSRF-защита включена для всех POST/PATCH/DELETE.
+- Токен получается через GET /api/auth/csrf (возвращается в JSON).
+- Передаётся в заголовке X-XSRF-TOKEN.
+- Для регистрации и логина CSRF отключён.
 
-Партия из статуса `PLANNED` переходит в `IN_PROGRESS`. Со склада списываются ингредиенты
-по рецептуре (количество на единицу × количество изделий). Если ингредиентов не хватает —
-операция отклоняется, данные не изменяются (транзакция откатывается).
+### Роли и права
 
-**Затрагивает:** ProductionBatch, Recipe, Ingredient.
+USER — чтение ингредиентов/рецептур, создание/просмотр своих заявок, удаление только своих заявок.
+ADMIN — все права USER + создание/изменение/удаление ингредиентов, рецептур, партий; выполнение бизнес-операций; управление пользователями.
 
-### 2. Завершение партии
-`POST /api/business/complete-batch/{batchId}`
+### @PreAuthorize
 
-Партия из статуса `IN_PROGRESS` переходит в `DONE`. Завершить можно только запущенную партию.
-
-### 3. Превращение заявки в производственную партию
-`POST /api/business/request-to-batch/{requestId}`
-
-Заявка из статуса `NEW` превращается в новую производственную партию. Заявка связывается
-с партией и переходит в статус `IN_PROGRESS`.
-
-**Затрагивает:** BakingRequest, ProductionBatch.
-
-### 4. Массовое планирование партии
-`POST /api/business/plan-batch` (тело: `{ "recipeId": 1, "quantity": 20 }`)
-
-Создаётся новая партия указанного объёма, **если** ингредиентов хватает. Иначе — отказ.
-
-**Затрагивает:** Recipe, Ingredient, ProductionBatch.
-
-### 5. Закрытие партии с обновлением связанных заявок
-`POST /api/business/close-batch/{batchId}`
-
-Партия должна быть в статусе `DONE`. Все заявки, привязанные к этой партии,
-переходят в статус `READY`.
-
-**Затрагивает:** ProductionBatch, BakingRequest.
-
----
+Контекстная проверка: USER может удалить только свою заявку.
+Реализовано через BakingRequestSecurity.isOwner(...) и аннотацию @PreAuthorize.
 
 ## REST API
 
-Для каждой сущности реализованы 5 CRUD-операций:
+CRUD для всех сущностей (см. requests.http):
 
-| Метод | URL | Действие |
-|---|---|---|
-| GET | `/api/{resource}` | Список всех |
-| GET | `/api/{resource}/{id}` | Один по id |
-| POST | `/api/{resource}` | Создать (201 Created) |
-| PATCH | `/api/{resource}/{id}` | Обновить (200 OK) |
-| DELETE | `/api/{resource}/{id}` | Удалить (204 No Content) |
+GET /api/users — ADMIN
+POST /api/ingredients — ADMIN
+GET /api/ingredients — Любой авторизованный
+POST /api/recipes — ADMIN
+POST /api/production-batches — ADMIN
+POST /api/baking-requests — Любой авторизованный
+DELETE /api/baking-requests/{id} — ADMIN или владелец
+POST /api/business/** — ADMIN
 
-Ресурсы: `users`, `ingredients`, `recipes`, `production-batches`, `baking-requests`.
+## Бизнес-операции
 
-**Ограничения целостности при удалении:** нельзя удалить сущность, на которую ссылаются
-другие (например, ингредиент, используемый в рецептуре). Возвращается ошибка 400.
+1. POST /api/business/start-batch/{id} — запуск партии со списанием ингредиентов.
+2. POST /api/business/complete-batch/{id} — завершение партии.
+3. POST /api/business/request-to-batch/{id} — превращение заявки в партию.
+4. POST /api/business/plan-batch — массовое планирование.
+5. POST /api/business/close-batch/{id} — закрытие партии с обновлением заявок.
 
----
+## Обработка ошибок
 
-## Стек и архитектура
+401 Unauthorized — нет аутентификации (JSON).
+403 Forbidden — недостаточно прав (JSON).
+400 Bad Request — бизнес-ограничения.
+Ошибки не раскрывают чувствительных данных (не говорят, какой email существует).
 
-- **Java 21**, **Spring Boot**, **Maven**.
-- **Spring Web MVC** — REST-контроллеры.
-- **Spring Data JPA + Hibernate** — слой работы с БД.
-- **PostgreSQL** — реляционная СУБД.
-- **dotenv-java** — для чтения секретов из `.env`-файла.
+## Запуск
 
-**Архитектура (слои):**
+Требования:
+- Java 21, Maven, PostgreSQL 14+
+- Файл .env в корне (см. .env.example)
 
-```
-Controller → Service → Repository → PostgreSQL
-```
-
-- **Controller** — приём HTTP-запросов, формирование ответов.
-- **Service** — бизнес-логика, проверки, транзакции.
-- **Repository** — доступ к данным (Spring Data JPA).
-- **BusinessService** — 5 бизнес-операций.
-
----
-
-## Запуск проекта
-
-### Требования
-- Java 21
-- Maven
-- PostgreSQL 14+
-- Настроенный файл `.env` в корне проекта (см. `.env.example`)
-
-### Настройка БД
-
-```sql
+Настройка БД:
 CREATE DATABASE bakery;
 CREATE USER bakery_user WITH PASSWORD 'bakery_pass';
 GRANT CONNECT ON DATABASE bakery TO bakery_user;
-\c bakery
 GRANT USAGE ON SCHEMA public TO bakery_user;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO bakery_user;
 GRANT CREATE ON SCHEMA public TO bakery_user;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public
-    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO bakery_user;
-```
 
-### Конфигурация `.env`
-
-Создайте файл `.env` в корне проекта:
-
-```
+Файл .env:
 DB_URL=jdbc:postgresql://localhost:5432/bakery
 DB_USERNAME=bakery_user
 DB_PASSWORD=bakery_pass
-```
 
-### Запуск
-
-```bash
+Запуск:
 ./mvnw spring-boot:run
-```
 
-Сервер стартует на `http://localhost:8080`.
-
-Таблицы создаются автоматически Hibernate (`spring.jpa.hibernate.ddl-auto=update`).
-
----
+Сервер стартует на http://localhost:8080.
 
 ## Тестирование
 
-Файл `requests.http` в корне проекта содержит 30 запросов:
-- CRUD для всех 5 сущностей (25 запросов).
-- 5 бизнес-операций.
+Файл requests.http содержит все запросы с примерами Basic Auth и CSRF-токенами.
 
-**Запуск в IntelliJ IDEA:** откройте `requests.http` и кликните ▷ слева от нужного запроса.
+Сценарий проверки:
+1. GET /api/auth/csrf — получить CSRF-токен.
+2. Запустить POST /api/ingredients (admin) — 201 Created.
+3. Запустить POST /api/ingredients (user) — 403 Forbidden.
+4. Создать заявки от user и admin.
+5. USER удаляет свою заявку → 204.
+6. USER удаляет чужую заявку → 403.
+7. ADMIN удаляет любую заявку → 204.
 
-**Рекомендуемая последовательность для проверки:**
-1. Создать пользователя.
-2. Создать 2 ингредиента.
-3. Создать рецептуру с этими ингредиентами.
-4. Создать партию и заявку.
-5. Выполнить бизнес-операции (`start-batch`, `request-to-batch`, `close-batch`).
-6. Проверить, что данные в БД изменились согласованно.
+## Структура
 
----
-
-## Структура проекта
-
-```
 src/main/java/com/example/student/
 ├── StudentApplication.java
-├── business/                 ← бизнес-операции
-│   ├── BusinessController.java
-│   └── BusinessService.java
-├── controller/               ← CRUD-контроллеры
-├── model/                    ← JPA-сущности
-├── repository/               ← JpaRepository-интерфейсы
-└── service/                  ← бизнес-логика CRUD
-```
+├── auth/ — AuthController, RegisterRequest
+├── business/ — бизнес-операции
+├── controller/ — CRUD-контроллеры
+├── model/ — JPA-сущности
+├── repository/ — JpaRepository
+├── security/ — SecurityConfig, CustomUserDetailsService, DataInitializer, RestAuthenticationEntryPoint, RestAccessDeniedHandler, BakingRequestSecurity
+└── service/ — бизнес-логика CRUD

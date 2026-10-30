@@ -1,58 +1,46 @@
-### ============================================
-### Тестовые запросы для API пекарни
-### Запуск: клик на ▷ слева от каждого запроса
-### ============================================
+### 0. ПОЛУЧИТЬ CSRF-ТОКЕН (запустить ПЕРВЫМ)
+GET http://localhost:8080/api/auth/csrf
 
-### 1. USERS — Пользователи
-### ============================================
+> {%
+    client.global.set("csrf_token", response.body.token);
+%}
 
-### Получить всех пользователей
+### 1. AUTH
+
+### Регистрация — Charlie
+POST http://localhost:8080/api/auth/register
+Content-Type: application/json
+X-XSRF-TOKEN: {{csrf_token}}
+
+{
+  "name": "Charlie",
+  "email": "charlie@bakery.local",
+  "password": "charlie123"
+}
+
+### Текущий пользователь — admin
+GET http://localhost:8080/api/auth/me
+Authorization: Basic admin@bakery.local admin123
+
+
+### 2. USERS
+
+### Получить всех пользователей — ADMIN
 GET http://localhost:8080/api/users
+Authorization: Basic admin@bakery.local admin123
 
-### Получить пользователя по id
-GET http://localhost:8080/api/users/1
+### Получить всех пользователей — USER (403)
+GET http://localhost:8080/api/users
+Authorization: Basic user@bakery.local user123
 
-### Создать пользователя — Alice
-POST http://localhost:8080/api/users
-Content-Type: application/json
 
-{
-  "name": "Alice",
-  "email": "alice@example.com"
-}
+### 3. INGREDIENTS
 
-### Создать пользователя — Bob
-POST http://localhost:8080/api/users
-Content-Type: application/json
-
-{
-  "name": "Bob",
-  "email": "bob@example.com"
-}
-
-### Обновить пользователя
-PATCH http://localhost:8080/api/users/1
-Content-Type: application/json
-
-{
-  "name": "Alice Updated"
-}
-
-### Удалить пользователя
-DELETE http://localhost:8080/api/users/2
-
-### 2. INGREDIENTS — Ингредиенты
-### ============================================
-
-### Получить все ингредиенты
-GET http://localhost:8080/api/ingredients
-
-### Получить ингредиент по id
-GET http://localhost:8080/api/ingredients/1
-
-### Создать ингредиент — Мука
+### Создать ингредиент — Мука — ADMIN
 POST http://localhost:8080/api/ingredients
 Content-Type: application/json
+Authorization: Basic admin@bakery.local admin123
+X-XSRF-TOKEN: {{csrf_token}}
 
 {
   "name": "Flour",
@@ -60,9 +48,11 @@ Content-Type: application/json
   "stock": 10000
 }
 
-### Создать ингредиент — Сахар
+### Создать ингредиент — Сахар — ADMIN
 POST http://localhost:8080/api/ingredients
 Content-Type: application/json
+Authorization: Basic admin@bakery.local admin123
+X-XSRF-TOKEN: {{csrf_token}}
 
 {
   "name": "Sugar",
@@ -70,29 +60,26 @@ Content-Type: application/json
   "stock": 5000
 }
 
-### Обновить ингредиент
-PATCH http://localhost:8080/api/ingredients/1
+### Создать ингредиент — USER (403)
+POST http://localhost:8080/api/ingredients
 Content-Type: application/json
+Authorization: Basic user@bakery.local user123
+X-XSRF-TOKEN: {{csrf_token}}
 
 {
-  "stock": 8000
+  "name": "Salt",
+  "unit": "g",
+  "stock": 2000
 }
 
-### Удалить ингредиент
-DELETE http://localhost:8080/api/ingredients/3
 
-### 3. RECIPES — Рецептуры
-### ============================================
+### 4. RECIPES
 
-### Получить все рецептуры
-GET http://localhost:8080/api/recipes
-
-### Получить рецептуру по id
-GET http://localhost:8080/api/recipes/1
-
-### Создать рецептуру — Хлеб
+### Создать рецептуру — Хлеб — ADMIN
 POST http://localhost:8080/api/recipes
 Content-Type: application/json
+Authorization: Basic admin@bakery.local admin123
+X-XSRF-TOKEN: 9uCZtJ5gIFeS_7qyDWrqHWKmanmEDnKEEACqllq8CsMpfhguxoGh16xXQW6_xtuEaUfefgaUR0CzaEOpKDSS9TnZbvMeHH0f
 
 {
   "name": "Bread",
@@ -102,96 +89,74 @@ Content-Type: application/json
   ]
 }
 
-### Обновить рецептуру
-PATCH http://localhost:8080/api/recipes/1
-Content-Type: application/json
 
-{
-  "name": "Bread Updated"
-}
+### 5. PRODUCTION BATCHES
 
-### Удалить рецептуру
-DELETE http://localhost:8080/api/recipes/1
-
-### 4. PRODUCTION BATCHES — Производственные партии
-### ============================================
-
-### Получить все партии
-GET http://localhost:8080/api/production-batches
-
-### Получить партию по id
-GET http://localhost:8080/api/production-batches/1
-
-### Создать партию на 10 хлебов
+### Создать партию на 10 хлебов — ADMIN
 POST http://localhost:8080/api/production-batches
 Content-Type: application/json
+Authorization: Basic admin@bakery.local admin123
+X-XSRF-TOKEN: iLY8R5wlNU4oIvgqEyBI5Aqz0cRIPzp8Ed6UZo9rqwG3MXPE7YcJcvhDBSwFQMpLIQ18hj6D_Px_Wl9RI-ihVr5em2TVUhH1
 
 {
   "recipe": { "id": 1 },
   "quantity": 10
 }
 
-### Обновить партию
-PATCH http://localhost:8080/api/production-batches/1
-Content-Type: application/json
 
-{
-  "quantity": 15
-}
+### 6. BAKING REQUESTS
 
-### Удалить партию
-DELETE http://localhost:8080/api/production-batches/2
-
-### 5. BAKING REQUESTS — Заявки на выпечку
-### ============================================
-
-### Получить все заявки
-GET http://localhost:8080/api/baking-requests
-
-### Получить заявку по id
-GET http://localhost:8080/api/baking-requests/1
-
-### Создать заявку от Alice на 5 хлебов
+### Создать заявку от user (id=2)
 POST http://localhost:8080/api/baking-requests
 Content-Type: application/json
+Authorization: Basic user@bakery.local user123
+X-XSRF-TOKEN: dShczcl7nWdi1lfs-ZZsJvms6gA7LlwG1qmcgun10HpoiGIxQhttq61O-wVP4WGJybtYRcmfx2JYSjkr7535s97Cs0xfu1VV
 
 {
-  "user": { "id": 1 },
+  "user": { "id": 2 },
   "recipe": { "id": 1 },
   "quantity": 5
 }
 
-### Обновить заявку
-PATCH http://localhost:8080/api/baking-requests/1
+### Создать заявку от admin (id=1)
+POST http://localhost:8080/api/baking-requests
 Content-Type: application/json
+Authorization: Basic admin@bakery.local admin123
+X-XSRF-TOKEN: myxHHo9dUedWZQeJyiCGghTAaGn63wmy6L6u86lSbLWEYTqnrBt2KrxkZ4F7Vzax-w2ytCalRVDKvWqf29_MwZBmCYa1UgvG
 
 {
-  "status": "READY"
+  "user": { "id": 1 },
+  "recipe": { "id": 1 },
+  "quantity": 3
 }
 
-### Удалить заявку
-DELETE http://localhost:8080/api/baking-requests/2
 
-### 6. BUSINESS OPERATIONS — Бизнес-операции
-### ============================================
+### 7. BUSINESS OPERATIONS
 
-### Операция 1. Запуск партии со списанием ингредиентов
+### Операция 1. Запуск партии — ADMIN
 POST http://localhost:8080/api/business/start-batch/1
+Authorization: Basic admin@bakery.local admin123
+X-XSRF-TOKEN: {{csrf_token}}
 
-### Операция 2. Завершение партии
+### Операция 2. Завершение партии — ADMIN
 POST http://localhost:8080/api/business/complete-batch/1
+Authorization: Basic admin@bakery.local admin123
+X-XSRF-TOKEN: {{csrf_token}}
 
-### Операция 3. Превратить заявку в партию
-POST http://localhost:8080/api/business/request-to-batch/1
 
-### Операция 4. Массовое планирование партии
-POST http://localhost:8080/api/business/plan-batch
-Content-Type: application/json
+### 8. ПРОВЕРКА @PreAuthorize
 
-{
-  "recipeId": 1,
-  "quantity": 20
-}
+### USER удаляет СВОЮ заявку (id=1) — 204
+DELETE http://localhost:8080/api/baking-requests/1
+Authorization: Basic user@bakery.local user123
+X-XSRF-TOKEN: xw4-tN2UQTyPHAEQIzpSnUvIGZJDFViIF7Oxy2xnp5zxpN4z9TtY0eqkd16ieDcgERdm_nz7NKt6JW2lddWC_wgGlP2TkO8H
 
-### Операция 5. Закрытие партии с обновлением заявок
-POST http://localhost:8080/api/business/close-batch/1
+### USER удаляет ЧУЖУЮ заявку (id=2) — 403
+DELETE http://localhost:8080/api/baking-requests/2
+Authorization: Basic user@bakery.local user123
+X-XSRF-TOKEN: f1Ou8dXBrRaFgZwXtzbUFASZXVw3uoAi3Fxk4Y_4_JRgM1-wG2WYweeklCSouKV11RvgIjSrcD5UiuIP6D5Q0rbPmqFTB2aA
+
+### ADMIN удаляет любую заявку — 204
+DELETE http://localhost:8080/api/baking-requests/2
+Authorization: Basic admin@bakery.local admin123
+X-XSRF-TOKEN: KAmJIty8t9ZOzv23h9VwpMDbRYrL4SM-nlLqz-ufPeKX209_Sj66Ee-K0bdj-ZvTt_hEl6a9aOiogxMTpjOMrtj9C9ql7ilJ
