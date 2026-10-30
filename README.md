@@ -115,15 +115,3 @@ DB_PASSWORD=bakery_pass
 5. USER удаляет свою заявку → 204.
 6. USER удаляет чужую заявку → 403.
 7. ADMIN удаляет любую заявку → 204.
-
-## Структура
-
-src/main/java/com/example/student/
-├── StudentApplication.java
-├── auth/ — AuthController, RegisterRequest
-├── business/ — бизнес-операции
-├── controller/ — CRUD-контроллеры
-├── model/ — JPA-сущности
-├── repository/ — JpaRepository
-├── security/ — SecurityConfig, CustomUserDetailsService, DataInitializer, RestAuthenticationEntryPoint, RestAccessDeniedHandler, BakingRequestSecurity
-└── service/ — бизнес-логика CRUD
